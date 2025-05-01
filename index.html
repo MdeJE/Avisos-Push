@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Calendario y Prueba de Notificaciones Push</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f9f9f9;
+      padding: 20px;
+    }
+    h1, h2 {
+      color: #333;
+    }
+    input, button {
+      margin: 5px;
+      padding: 7px;
+      font-size: 1em;
+    }
+    table {
+      margin-top: 15px;
+      border-collapse: collapse;
+      width: 100%;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: left;
+    }
+    th {
+      background: #eee;
+    }
+  </style>
+</head>
+<body>
+  <h1>Calendario con Notificaciones Push</h1>
+  
+  <!-- Formulario para agregar evento -->
+  <div>
+    <label for="eventTitle">Título del evento:</label>
+    <input type="text" id="eventTitle" placeholder="Ej. Reunión de equipo">
+  </div>
+  <div>
+    <label for="eventDateTime">Fecha y hora:</label>
+    <input type="datetime-local" id="eventDateTime">
+  </div>
+  <button onclick="addEvent()">Agregar Evento</button>
+  
+  <!-- Botón adicional para enviar notificación de prueba manualmente -->
+  <button onclick="triggerManualNotification()">Enviar Notificación de Prueba</button>
+
+  <h2>Eventos Programados</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Título</th>
+        <th>Fecha y Hora</th>
+        <th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody id="eventsTable">
+      <!-- Se llenará dinámicamente -->
+    </tbody>
+  </table>
+
+  <script>
+    // Array para almacenar eventos
+    let events = [];
+    let eventId = 0;
+
+    // Agrega un evento al calendario y programa su notificación
+    function addEvent() {
+      const title = document.getElementById('eventTitle').value.trim();
+      const datetimeStr = document.getElementById('eventDateTime').value;
+      if (!title || !datetimeStr) {
+        alert("Por favor, ingresa el título y la fecha/hora.");
+        return;
+      }
+      const eventObj = {
+        id: eventId++,
+        title: title,
+        datetime: new Date(datetimeStr)
+      };
+      events.push(eventObj);
+      updateEventsTable();
+      scheduleEventNotification(eventObj);
+      document.getElementById('eventTitle').value = "";
+      document.getElementById('eventDateTime').value = "";
+    }
+
+    // Actualiza la tabla de eventos
+    function updateEventsTable() {
+      const tableBody = document.getElementById('eventsTable');
+      tableBody.innerHTML = "";
+      events.forEach(evt => {
+        const tr = document.createElement('tr');
+
+        const tdTitle = document.createElement('td');
+        tdTitle.textContent = evt.title;
+
+        const tdDateTime = document.createElement('td');
+        tdDateTime.textContent = evt.datetime.toLocaleString();
+
+        const tdActions = document.createElement('td');
+        const btnDelete = document.createElement('button');
+        btnDelete.textContent = "Eliminar";
+        btnDelete.onclick = () => {
+          removeEvent(evt.id);
+        };
+        tdActions.appendChild(btnDelete);
+
+        tr.appendChild(tdTitle);
+        tr.appendChild(tdDateTime);
+        tr.appendChild(tdActions);
+        tableBody.appendChild(tr);
+      });
+    }
+
+    // Elimina un evento y actualiza el listado
+    function removeEvent(id) {
+      events = events.filter(evt => evt.id !== id);
+      updateEventsTable();
+    }
+
+    // Programa la notificación para el evento, si es que aún no ha pasado la fecha
+    function scheduleEventNotification(eventObj) {
+      const now = new Date();
+      const eventTime = eventObj.datetime;
+      const delay = eventTime.getTime() - now.getTime();
+
+      if (delay <= 0) {
+        console.log("El evento ya pasó, no se programa notificación.");
+        return;
+      }
+
+      setTimeout(() => {
+        showNotification(eventObj.title, eventObj.datetime.toLocaleString());
+      }, delay);
+    }
+
+    // Muestra la notificación usando el Service Worker
+    function showNotification(title, datetimeStr) {
+      if (Notification.permission === "granted") {
+        navigator.serviceWorker.getRegistration().then(registration => {
+          if (registration) {
+            registration.showNotification(title, {
+              body: "Evento a las: " + datetimeStr,
+              icon: "", // Ruta al icono, si tienes uno
+              vibrate: [200, 100, 200],
+              tag: "evento-" + title
+            });
+          }
+        });
+      }
+    }
+    
+    // Función para enviar manualmente una notificación de prueba
+    function triggerManualNotification() {
+      showNotification("Notificación de Prueba", new Date().toLocaleString());
+    }
+
+    // Solicita permiso para las notificaciones al cargar la página
+    if (Notification.permission !== "granted") {
+      Notification.requestPermission();
+    }
+
+    // Registro del Service Worker de forma inline usando un Blob
+    if ('serviceWorker' in navigator) {
+      const swCode = `
+        self.addEventListener('install', event => {
+          console.log('Service Worker instalado.');
+          self.skipWaiting();
+        });
+        self.addEventListener('activate', event => {
+          console.log('Service Worker activado.');
+        });
+      `;
+      const blob = new Blob([swCode], { type: 'application/javascript' });
+      const swBlobUrl = URL.createObjectURL(blob);
+      navigator.serviceWorker.register(swBlobUrl)
+        .then(registration => {
+          console.log('Service Worker registrado:', registration);
+        })
+        .catch(error => {
+          console.error('Error al registrar el Service Worker:', error);
+        });
+    } else {
+      console.error("Service Worker no es compatible en este navegador.");
+    }
+  </script>
+</body>
+</html>
